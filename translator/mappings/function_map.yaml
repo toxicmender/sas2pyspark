@@ -1,0 +1,14 @@
+substr: substring
+upcase: upper
+lowcase: lower
+trim: trim
+compress: regexp_replace
+scan: split
+today: current_date
+datepart: to_date
+year: year
+month: month
+day: day
+sum: sum
+mean: avg
+n: count
