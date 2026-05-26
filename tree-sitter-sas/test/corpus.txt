@@ -92,3 +92,55 @@ run;
 proc means data=work.test;
   var x y z;
 run;
+
+; Test: DATA STEP with MERGE
+data work.merged;
+  merge work.left work.right;
+  by id;
+run;
+
+; Test: KEEP and DROP statements
+data work.subset;
+  set work.input;
+  keep important_var;
+  drop unimportant_var;
+run;
+
+; Test: LENGTH statement
+data work.typed;
+  length name $100 age 8;
+  set work.input;
+run;
+
+; Test: FORMAT and INFORMAT statements
+data work.formatted;
+  set work.input;
+  format date_var DATE9. amount DOLLAR10.2;
+  informat start_date DATE9. salary DOLLAR10.2;
+run;
+
+; Test: RETAIN and OUTPUT statements
+data work.retained;
+  retain row_number 0;
+  set work.input;
+  row_number + 1;
+  if status = 'ACTIVE' then output;
+run;
+
+; Test: DELETE statement
+data work.filtered;
+  set work.input;
+  if status = 'INVALID' then delete;
+run;
+
+; Test: Complex DATA step with multiple statements
+data work.complex;
+  merge sales1 sales2;
+  by region;
+  length region $20 amount 12;
+  format amount DOLLAR10.2;
+  keep region amount date;
+  drop tax_code;
+  if amount > 1000 then category = 'HIGH';
+  else category = 'LOW';
+run;

@@ -8,18 +8,9 @@ from pathlib import Path
 from typing import Optional
 
 from translator.emitters import PySparkEmitter
-from translator.ir import (
-    AssignmentNode,
-    DatasetNode,
-    FilterNode,
-    IRProgram,
-    JoinNode,
-    JoinType,
-    ProjectionNode,
-    SortNode,
-)
+from translator.ir import IRProgram
 from translator.parser import ASTBuilder, SASParser
-from translator.semantic import SemanticAnalyzer, SemanticContext
+from translator.semantic.lower import SASLowerer
 
 
 class SASTranslator:
@@ -27,7 +18,6 @@ class SASTranslator:
 
     def __init__(self):
         self.parser = SASParser()
-        self.semantic_analyzer = SemanticAnalyzer()
         self.emitter = PySparkEmitter()
 
     def translate_file(self, input_path: Path) -> str:
@@ -38,7 +28,13 @@ class SASTranslator:
         return self.translate_source(sas_code)
 
     def translate_source(self, source_code: str) -> str:
-        """Translate SAS source code to PySpark."""
+        """Translate SAS source code to PySpark.
+
+        Pipeline:
+        1. Parse SAS code to AST
+        2. Lower AST to IR (semantic lowering)
+        3. Emit PySpark code from IR
+        """
         # Step 1: Parse SAS code
         ast_dict = self.parser.parse(source_code)
         if not ast_dict:
@@ -47,33 +43,25 @@ class SASTranslator:
         # Step 2: Build typed AST
         ast_root = ASTBuilder.build_from_dict(ast_dict)
 
-        # Step 3: Semantic analysis
-        # In MVP, we use a simple heuristic-based approach
-        ir_program = self._build_ir_from_ast(ast_root)
+        # Step 3: Semantic lowering (AST → IR)
+        # Now handles multiple DATA steps and multiple datasets properly
+        ir_program = self._lower_to_ir(ast_root)
 
         # Step 4: Generate PySpark code
         pyspark_code = self.emitter.emit_program(ir_program)
 
         return pyspark_code
 
-    def _build_ir_from_ast(self, ast_root) -> IRProgram:
-        """Build IR from AST (MVP implementation)."""
-        program = IRProgram()
+    def _lower_to_ir(self, ast_root) -> IRProgram:
+        """Lower AST to IR using semantic lowering.
 
-        # For MVP, create a simple example IR tree
-        # This demonstrates the IR structure for:
-        # data sales_final;
-        #     set sales_2024;
-        #     if revenue > 1000 then category='HIGH';
-        #     else category='LOW';
-        # run;
-
-        dataset_node = DatasetNode("sales_2024")
-        ir_tree = dataset_node
-
-        program.add_step("sales_final", ir_tree)
-
-        return program
+        This step:
+        - Processes all DATA steps in the program
+        - Handles multiple datasets in SET/MERGE statements
+        - Generates appropriate IR nodes for each operation
+        """
+        lowerer = SASLowerer()
+        return lowerer.lower_program(ast_root)
 
     def translate_directory(self, input_dir: Path, output_dir: Path) -> None:
         """Translate all SAS files in input directory to output directory."""
