@@ -1,0 +1,26 @@
+[package]
+name = "tree-sitter-sas"
+version = "0.1.0"
+edition = "2021"
+description = "Tree-sitter grammar for SAS language"
+license = "MIT"
+keywords = ["sas", "tree-sitter", "parser"]
+repository = "https://github.com/dantran/sas2pyspark"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+tree-sitter = "0.24"
+
+[build-dependencies]
+cc = "1.0"
+
+[[example]]
+name = "parse"
+path = "examples/parse.rs"
+
+[profile.release]
+opt-level = 3
+lto = true

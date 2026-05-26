@@ -1,0 +1,94 @@
+; Test: Simple literals
+(source_file
+  (data_step))
+
+; Test: Number literals
+123
+123.456
+1.23e10
+1e-5
+
+; Test: String literals
+"hello world"
+'hello world'
+'it''s'
+
+; Test: Simple identifier
+x
+
+; Test: Unary operators
+-x
++y
+not flag
+
+; Test: Binary arithmetic
+x + y
+x - y
+x * y
+x / y
+
+; Test: Exponentiation
+x ** 2
+2 ** 3 ** 4
+
+; Test: Logical operators
+a and b
+c or d
+not e
+
+; Test: Comparison operators
+x = y
+x ^= y
+x < y
+x > y
+x <= y
+x >= y
+x == y
+x ~= y
+x in (1, 2, 3)
+x contains 'text'
+
+; Test: String concatenation
+x || y
+
+; Test: Function calls
+sqrt(x)
+put(y, z)
+abs(-5)
+
+; Test: Parenthesized expressions
+(a + b)
+((x + y) * z)
+
+; Test: Complex expression (operator precedence)
+a + b * c
+a or b and c
+not a or b
+
+; Test: DATA STEP with assignment
+data work.test;
+  x = 5;
+run;
+
+; Test: DATA STEP with IF
+data work.test;
+  if x > 0 then y = 1;
+  else y = 0;
+run;
+
+; Test: DO LOOP
+data work.test;
+  do i = 1 to 10;
+    sum = sum + i;
+  end;
+run;
+
+; Test: SET statement
+data work.out;
+  set work.in;
+run;
+
+; Test: PROC step
+proc means data=work.test;
+  var x y z;
+run;

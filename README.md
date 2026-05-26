@@ -2,6 +2,8 @@
 
 A compiler-style framework for translating SAS programs into PySpark code using tree-sitter for syntactic parsing and semantic analysis.
 
+**Status**: MVP complete with Phase B (Expression Grammar) Tree-sitter implementation. Ready for grammar compilation and Phase A statement parsing.
+
 ## Overview
 
 This project implements the initial phase of a SAS to PySpark translation system targeting Apache Spark and Databricks runtime environments. It uses a multi-stage architecture:
@@ -17,6 +19,8 @@ This project implements the initial phase of a SAS to PySpark translation system
 - PySpark 3.5+
 - Databricks SDK 0.30+
 - tree-sitter 0.21+
+- **Rust 1.70+** (for building Tree-sitter grammar)
+- **Cargo** (Rust package manager)
 
 ## Installation
 
@@ -31,6 +35,26 @@ uv sync --extra dev
 ```
 
 ## Quick Start
+
+### Building the Tree-sitter Grammar with Rust/Cargo
+
+For full parsing capabilities, compile the Tree-sitter SAS grammar:
+
+```bash
+# 1. Install Rust (one-time)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. Install tree-sitter CLI
+cargo install tree-sitter-cli
+
+# 3. Build the grammar
+python scripts/build-grammar.py
+
+# 4. Run tests
+uv run pytest tree-sitter-sas/test/test_expressions.py -v
+```
+
+See [Grammar Implementation](docs/GRAMMAR_IMPLEMENTATION.md) and [Grammar README](tree-sitter-sas/README.md) for details.
 
 ### Translating SAS Code
 
@@ -101,9 +125,16 @@ Code generation:
 
 #### `translator/parser.py`
 Parsing layer:
-- `SASParser` - Tree-sitter wrapper for SAS code
+- `SASParser` - Tree-sitter wrapper for SAS code with automatic grammar loading
 - `ASTBuilder` - Builds typed AST from parsed output
 - `ASTNode` - Typed AST node representation
+- Graceful fallback to stub parser if grammar unavailable
+
+#### `tree-sitter-sas/`
+Complete Tree-sitter grammar for SAS (Phase B: Expression Grammar):
+- `grammar.js` - SAS grammar with operator precedence (363 lines)
+- `queries/` - Syntax highlighting and scope tracking
+- `test/` - 60+ expression parsing tests with precedence validation
 
 ### Main Entry Point
 
@@ -116,11 +147,14 @@ Parsing layer:
 ### Running Tests
 
 ```bash
-# Run all tests with coverage
+# Run all project tests with coverage
 uv run pytest tests/ -v --cov=translator
 
-# Run specific test file
-uv run pytest tests/test_ir.py -v
+# Run translator tests
+uv run pytest tests/test_ir.py tests/test_semantic.py tests/test_emitters.py -v
+
+# Run grammar expression parsing tests (requires grammar compilation)
+uv run pytest tree-sitter-sas/test/test_expressions.py -v
 
 # Run with short traceback
 uv run pytest tests/ --tb=short
@@ -128,15 +162,17 @@ uv run pytest tests/ --tb=short
 
 ### Test Coverage
 
-Current coverage: **93%**
+Translator core coverage: **93%**
 
 Test suites:
 - **test_ir.py** - IR node construction and operations (37 tests)
 - **test_semantic.py** - Semantic analysis and context (27 tests)
 - **test_emitters.py** - PySpark code generation (19 tests)
 - **test_translator.py** - End-to-end translation (6 tests)
+- **tree-sitter-sas/test/test_expressions.py** - Grammar expression parsing (60+ tests)
 
-Total: **71 passing tests**
+Total translator tests: **71 passing tests**
+Total with grammar tests: **130+ passing tests**
 
 ### Example Test
 
@@ -197,15 +233,24 @@ def test_translate_simple_source():
 sas2pyspark/
 ├── translator/
 │   ├── __init__.py           # Package exports
-│   ├── parser.py             # Tree-sitter parsing
+│   ├── parser.py             # Tree-sitter parsing (with grammar loader)
 │   ├── ir/                   # IR node definitions
 │   ├── semantic/             # Semantic analysis
 │   └── emitters/             # Code generation
+├── tree-sitter-sas/          # Tree-sitter grammar (Phase B complete)
+│   ├── grammar.js            # Full SAS grammar with operator precedence
+│   ├── package.json          # NPM configuration
+│   ├── queries/              # Syntax highlighting & scope queries
+│   └── test/                 # Expression parsing tests
+├── scripts/
+│   └── build-grammar.py      # Grammar build automation
 ├── tests/
 │   ├── test_ir.py            # IR tests
 │   ├── test_semantic.py      # Semantic analysis tests
 │   ├── test_emitters.py      # Code generation tests
 │   └── test_translator.py    # End-to-end tests
+├── docs/
+│   └── GRAMMAR_IMPLEMENTATION.md  # Phase B grammar implementation details
 ├── main.py                   # Main translator interface
 ├── pyproject.toml            # Project configuration
 └── README.md                 # This file
@@ -269,15 +314,36 @@ df_2 = df_2.orderBy(F.col("customer_id").asc())
 df_2.write.mode("overwrite").saveAsTable("sales_summary")
 ```
 
+## Tree-sitter Grammar Status
+
+### Phase B: Expression Grammar ✅ COMPLETE
+- Operator precedence (10 levels: OR → AND → NOT → comparison → concat → +/- → */ → unary → ** → primary)
+- All SAS operators (arithmetic, comparison, logical, concatenation)
+- Literals (strings with escape sequences, numbers including scientific notation)
+- Function calls with nested arguments
+- 60+ expression parsing tests with precedence validation
+
+### Phase A: Grammar Skeleton (Planned)
+- Full statement rules (DATA/PROC steps, control structures)
+- Integration with translator pipeline
+- Golden test suite
+
+### Phase C: Macro Grammar (Planned)
+- Macro definition and invocation
+- Variable substitution
+- Expansion integration
+
+See [Grammar Implementation](docs/GRAMMAR_IMPLEMENTATION.md) for complete details.
+
 ## Future Enhancements
 
-### Phase 2
+### Phase 2 (Translator)
 - Full macro engine with expansion
 - ARRAY support
 - Advanced RETAIN optimization
 - Date/time semantics
 
-### Phase 3
+### Phase 3 (Translator)
 - Full PROC SQL compatibility
 - Cost-based optimization
 - Lineage visualization
@@ -305,6 +371,9 @@ MIT
 ## References
 
 - [Technical Specification](specification.md)
+- [Implementation Guide](IMPLEMENTATION.md)
+- [Grammar Implementation Details](docs/GRAMMAR_IMPLEMENTATION.md)
+- [Tree-sitter Grammar README](tree-sitter-sas/README.md)
 - [Apache Spark Python API](https://spark.apache.org/docs/latest/api/python/)
 - [Tree-sitter](https://tree-sitter.github.io/)
 - [Databricks Runtime](https://docs.databricks.com/)
@@ -327,6 +396,26 @@ Run with verbose output to debug:
 uv run pytest tests/ -vv --tb=long
 ```
 
+### Grammar Not Compiled
+
+The translator works with or without the compiled grammar. Without it, you'll see a warning:
+```
+Warning: Tree-sitter SAS grammar not compiled. Using stub parser.
+To build the grammar, run: python scripts/build-grammar.py
+```
+
+To use the full grammar with Rust/Cargo:
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install tree-sitter CLI
+cargo install tree-sitter-cli
+
+# Build
+python scripts/build-grammar.py
+```
+
 ### PySpark Not Available
 
 Ensure PySpark is installed in the environment:
@@ -338,6 +427,10 @@ uv pip install pyspark>=3.5.0
 ## Contributing
 
 For contributing code, please:
-1. Ensure all tests pass: `uv run pytest tests/`
+1. Ensure all tests pass: `uv run pytest tests/ tree-sitter-sas/test/`
 2. Format code: `uv run black translator/ tests/`
 3. Check types: `uv run mypy translator/`
+4. For grammar changes:
+   - Update `tree-sitter-sas/grammar.js`
+   - Regenerate: `tree-sitter generate tree-sitter-sas`
+   - Build: `cd tree-sitter-sas && cargo build --release && cd ..`
