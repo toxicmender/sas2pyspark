@@ -15,6 +15,7 @@ import re
 import warnings
 from typing import Dict, List, Optional, Set, Tuple
 
+from translator.diagnostics import get_global_diagnostics
 from translator.ir import (
     AssignmentNode,
     DatasetNode,
@@ -23,7 +24,9 @@ from translator.ir import (
     IRProgram,
     JoinNode,
     JoinType,
+    OutputSelectNode,
     ProjectionNode,
+    RetainNode,
     SortNode,
     UnionNode,
 )
@@ -59,6 +62,7 @@ class DataStepLowerer:
         self.merge_datasets: List[str] = []
         self.merge_keys: List[str] = []
         self.output_datasets: List[str] = []
+        self.retain_vars: Dict[str, Optional[str]] = {}  # var -> initial_value
         self.delete_flag = False
 
     def lower_data_step(self, data_step_node: ASTNode, step_output_name: str) -> Optional[IRNode]:
@@ -120,33 +124,71 @@ class DataStepLowerer:
             pass
 
     def _process_set_statement(self, stmt: ASTNode) -> None:
-        """Process SET statement - extracts all dataset names."""
+        """Process SET statement - extracts all dataset names.
+
+        Handles both comma-separated and space-separated dataset lists.
+        Examples:
+            set data1 data2 data3;
+            set data1, data2, data3;
+        """
         # Extract all datasets from the SET statement text
         text = stmt.text.lower()
         # Remove 'set' keyword and semicolon
         text = re.sub(r"^\s*set\s+", "", text)
         text = re.sub(r"\s*;?\s*$", "", text)
 
-        # Split by comma and process each dataset reference
-        datasets = [ds.strip() for ds in text.split(",")]
+        # Split by comma first (handles comma-separated lists)
+        comma_parts = [p.strip() for p in text.split(",")]
+        datasets = []
+
+        for part in comma_parts:
+            if part:
+                # Further split by whitespace (handles space-separated lists)
+                # But be careful: some dataset names might have spaces due to formatting
+                # So we split on multiple spaces or explicit comma boundaries
+                space_parts = part.split()
+                datasets.extend(space_parts)
+
+        # Filter out empty strings and options (keywords like (in=...) or (out=...))
+        # These will be handled separately if needed
+        datasets = [ds.strip() for ds in datasets if ds.strip() and not ds.startswith("(")]
+
         self.input_datasets.extend(datasets)
 
-        # Notify semantic analyzer
-        for dataset_name in datasets:
-            self.semantic_analyzer.analyze_set_statement([dataset_name])
+        # Notify semantic analyzer with all datasets at once
+        if datasets:
+            self.semantic_analyzer.analyze_set_statement(datasets)
 
     def _process_merge_statement(self, stmt: ASTNode) -> None:
-        """Process MERGE statement - extracts all datasets to merge."""
+        """Process MERGE statement - extracts all datasets to merge.
+
+        Handles both comma-separated and space-separated dataset lists.
+        Examples:
+            merge left right;
+            merge d1 d2 d3;
+            merge d1, d2, d3;
+        """
         text = stmt.text.lower()
         text = re.sub(r"^\s*merge\s+", "", text)
         text = re.sub(r"\s*;?\s*$", "", text)
 
-        # Extract dataset list (may contain options in parentheses)
-        # For now, just extract simple dataset names
-        datasets = [ds.strip() for ds in re.split(r"[\s,]", text) if ds.strip()]
+        # Split by comma first (handles comma-separated lists)
+        comma_parts = [p.strip() for p in text.split(",")]
+        datasets = []
+
+        for part in comma_parts:
+            if part:
+                # Further split by whitespace (handles space-separated lists)
+                space_parts = part.split()
+                datasets.extend(space_parts)
+
+        # Filter out empty strings and options (keywords like (in=...) or (out=...))
+        datasets = [ds.strip() for ds in datasets if ds.strip() and not ds.startswith("(")]
+
         self.merge_datasets.extend(datasets)
 
-        self.semantic_analyzer.analyze_merge_statement(datasets)
+        if datasets:
+            self.semantic_analyzer.analyze_merge_statement(datasets)
 
     def _process_by_statement(self, stmt: ASTNode) -> None:
         """Process BY statement - extracts BY variables."""
@@ -201,25 +243,75 @@ class DataStepLowerer:
         pass
 
     def _process_retain_statement(self, stmt: ASTNode) -> None:
-        """Process RETAIN statement - mark variables as retained."""
+        """Process RETAIN statement - track variables to be retained.
+
+        RETAIN statement syntax:
+            RETAIN [var1 [initial_value] [var2 [initial_value]] ...];
+
+        Examples:
+            RETAIN counter 0;           # counter starts at 0
+            RETAIN sum total;           # sum and total with no initial value
+            RETAIN x 1 y 2 z 3;         # multiple variables with initial values
+        """
         text = stmt.text.lower()
         text = re.sub(r"^\s*retain\s+", "", text)
         text = re.sub(r"\s*;?\s*$", "", text)
 
-        # Extract variable names
-        variables = re.findall(r"(\w+)", text)
-        for var in variables:
-            self.context.mark_retained(var)
+        if not text.strip():
+            return
+
+        # Parse the retain specification
+        # Split into tokens: var names and numeric literals
+        tokens = text.split()
+
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            # Check if this is a variable name (not a number/literal)
+            if re.match(r"\w+", token) and not re.match(r"^-?\d+(\.\d+)?$", token):
+                var_name = token
+                initial_value = None
+
+                # Check if next token is an initial value
+                if i + 1 < len(tokens):
+                    next_token = tokens[i + 1]
+                    # If next token is a number, it's an initial value
+                    if re.match(r"^-?\d+(\.\d+)?$", next_token):
+                        initial_value = next_token
+                        i += 2
+                    else:
+                        i += 1
+                else:
+                    i += 1
+
+                # Store the retained variable
+                self.retain_vars[var_name] = initial_value
+                self.context.mark_retained(var_name)
 
     def _process_output_statement(self, stmt: ASTNode) -> None:
-        """Process OUTPUT statement - track output datasets."""
+        """Process OUTPUT statement - track output datasets.
+
+        Handles both space and comma-separated dataset names.
+        Examples:
+            OUTPUT;                  # implicit output
+            OUTPUT ds1;              # single dataset
+            OUTPUT ds1 ds2 ds3;      # space-separated
+            OUTPUT ds1, ds2, ds3;    # comma-separated
+        """
         text = stmt.text.lower()
         text = re.sub(r"^\s*output\s+", "", text)
         text = re.sub(r"\s*;?\s*$", "", text)
 
         if text.strip():
             # Specific output datasets listed
-            datasets = [ds.strip() for ds in text.split(",")]
+            # Split by comma first, then by space for each part
+            comma_parts = [p.strip() for p in text.split(",")]
+            datasets = []
+            for part in comma_parts:
+                if part:
+                    space_parts = part.split()
+                    datasets.extend(space_parts)
+            datasets = [ds.strip() for ds in datasets if ds.strip()]
             self.output_datasets.extend(datasets)
         else:
             # Implicit output to main output dataset
@@ -417,6 +509,14 @@ class DataStepLowerer:
         for var_name, expression in self.assignments:
             ir_node = AssignmentNode(var_name, expression, ir_node)
 
+        # Apply RETAIN statement if present
+        if self.retain_vars:
+            ir_node = RetainNode(self.retain_vars, ir_node)
+
+        # Apply OUTPUT filtering if specific datasets were specified
+        if self.output_datasets:
+            ir_node = OutputSelectNode(self.output_datasets, ir_node)
+
         return ir_node
 
     def _build_set_ir(self) -> Optional[IRNode]:
@@ -472,7 +572,8 @@ class SASLowerer:
     """Lowers a complete SAS program AST to IR.
 
     Handles multiple DATA steps and PROC steps, managing dataset dependencies
-    and ensuring each step produces appropriate IR.
+    and ensuring each step produces appropriate IR. Now emits diagnostics for
+    unsupported top-level statements instead of silently ignoring them.
     """
 
     def __init__(self):
@@ -501,7 +602,7 @@ class SASLowerer:
                 self._lower_proc_step(child)
             else:
                 # Other statement types (LIBNAME, OPTIONS, etc.)
-                pass
+                self._handle_unsupported_top_level_statement(child)
 
         return self.program_ir
 
@@ -526,10 +627,73 @@ class SASLowerer:
                 warnings.warn(f"Failed to lower DATA step for dataset '{output_name}'")
 
     def _lower_proc_step(self, proc_step_node: ASTNode) -> None:
-        """Lower a PROC step to IR."""
-        # For now, we'll skip PROC steps
-        # Full implementation would handle PROC SORT, PROC MEANS, etc.
-        warnings.warn("PROC steps not yet supported in IR lowering")
+        """Lower a PROC step to IR.
+
+        Currently emits a diagnostic instead of silently skipping.
+        """
+        # Extract the PROC type from the text
+        proc_text = proc_step_node.text.lower()
+        proc_match = re.match(r"\bproc\s+(\w+)", proc_text)
+        proc_type = proc_match.group(1) if proc_match else "proc"
+
+        # Emit diagnostic for unsupported PROC
+        diagnostics = get_global_diagnostics()
+        diagnostics.add_unsupported_top_level_statement(
+            statement_type=proc_type,
+            source_text=proc_step_node.text,
+            location=f"proc_{proc_type}",
+        )
+
+    def _handle_unsupported_top_level_statement(self, node: ASTNode) -> None:
+        """Handle unsupported top-level statements.
+
+        Emits diagnostics for recognized statement types (LIBNAME, OPTIONS, etc.)
+        or generic unparsed warning for unknown statements.
+
+        Args:
+            node: The AST node for the statement
+        """
+        stmt_type = node.node_type.lower()
+        stmt_text = node.text.lower()
+
+        # Recognized top-level statement types that are not yet supported
+        supported_types = {
+            "libname_statement": "libname",
+            "options_statement": "options",
+            "filename_statement": "filename",
+            "endsas_statement": "endsas",
+            "quit": "quit",
+            "run": "run",
+        }
+
+        diagnostics = get_global_diagnostics()
+
+        # Check if this is a recognized but unsupported statement type
+        if stmt_type in supported_types:
+            stmt_keyword = supported_types[stmt_type]
+            diagnostics.add_unsupported_top_level_statement(
+                statement_type=stmt_keyword,
+                source_text=node.text,
+                location=stmt_type,
+            )
+        # Check if the statement starts with a recognized keyword
+        elif any(
+            stmt_text.startswith(kw) for kw in ["libname", "options", "filename", "endsas", "quit"]
+        ):
+            # Extract the keyword
+            keyword = stmt_text.split()[0] if stmt_text.split() else "unknown"
+            diagnostics.add_unsupported_top_level_statement(
+                statement_type=keyword,
+                source_text=node.text,
+                location=keyword,
+            )
+        else:
+            # Generic unparsed statement
+            if node.text.strip():  # Only warn if there's actual content
+                diagnostics.add_unparsed_top_level_statement(
+                    source_text=node.text,
+                    location=stmt_type,
+                )
 
     def _extract_output_datasets(self, data_step_node: ASTNode) -> List[str]:
         """Extract output dataset names from a DATA step node.

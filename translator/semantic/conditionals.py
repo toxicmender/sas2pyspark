@@ -73,7 +73,7 @@ class ConditionalParser:
             return None
 
         condition = if_match.group(1).strip()
-        consequence = if_match.group(2).strip()
+        consequence = ConditionalParser._clean_consequence(if_match.group(2))
 
         consequence_type = ConditionalParser._identify_consequence_type(consequence)
         clauses.append(
@@ -99,7 +99,7 @@ class ConditionalParser:
                 )
                 if else_if_match:
                     elif_condition = else_if_match.group(1).strip()
-                    elif_consequence = else_if_match.group(2).strip()
+                    elif_consequence = ConditionalParser._clean_consequence(else_if_match.group(2))
                     elif_type = ConditionalParser._identify_consequence_type(elif_consequence)
 
                     clauses.append(
@@ -122,7 +122,7 @@ class ConditionalParser:
                     re.IGNORECASE | re.DOTALL,
                 )
                 if else_match:
-                    else_consequence = else_match.group(1).strip()
+                    else_consequence = ConditionalParser._clean_consequence(else_match.group(1))
                     else_type = ConditionalParser._identify_consequence_type(else_consequence)
 
                     clauses.append(
@@ -141,6 +141,18 @@ class ConditionalParser:
                     break
 
         return clauses if clauses else None
+
+    @staticmethod
+    def _clean_consequence(consequence: str) -> str:
+        """Clean consequence text by removing trailing semicolons and whitespace.
+
+        Args:
+            consequence: The consequence text to clean
+
+        Returns:
+            Cleaned consequence text
+        """
+        return consequence.strip().rstrip(";")
 
     @staticmethod
     def _identify_consequence_type(consequence: str) -> ConsequenceType:

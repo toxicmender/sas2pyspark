@@ -31,6 +31,8 @@ class IRNodeType(Enum):
     AGGREGATE = "aggregate"
     RENAME = "rename"
     UNION = "union"
+    RETAIN = "retain"
+    OUTPUT_SELECT = "output_select"
 
 
 @dataclass
@@ -142,6 +144,45 @@ class UnionNode(IRNode):
         super().__init__(IRNodeType.UNION, metadata)
         self.inputs = inputs
         self.all_mode = all_mode
+
+
+class RetainNode(IRNode):
+    """Represents RETAIN statement for state preservation across iterations.
+
+    RETAIN in SAS maintains variable values across data step iterations.
+    In Spark, this is typically implemented using:
+    - Window functions with lag()
+    - Stateful aggregations
+    - Pre-computed lag columns
+    """
+
+    def __init__(
+        self,
+        retain_vars: Dict[str, Optional[str]],
+        input_node: "IRNode",
+        **metadata: Any,
+    ):
+        super().__init__(IRNodeType.RETAIN, metadata)
+        self.retain_vars = retain_vars  # Map of variable -> initial_value (or None)
+        self.input_node = input_node
+
+
+class OutputSelectNode(IRNode):
+    """Represents OUTPUT statement filtering which datasets receive observations.
+
+    OUTPUT statement in SAS controls which datasets get written.
+    This node represents selective output to specific named datasets.
+    """
+
+    def __init__(
+        self,
+        output_datasets: List[str],
+        input_node: "IRNode",
+        **metadata: Any,
+    ):
+        super().__init__(IRNodeType.OUTPUT_SELECT, metadata)
+        self.output_datasets = output_datasets
+        self.input_node = input_node
 
 
 @dataclass

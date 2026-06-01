@@ -268,12 +268,14 @@ module.exports = grammar({
       choice(
         $.number_literal,
         $.string_literal,
+        $.function_call, // Must come before identifier to avoid ambiguity
         $.identifier,
-        $.function_call,
         seq("(", $.expression, ")"),
       ),
 
     // ============ FUNCTION CALLS ============
+    // Parsed eagerly before bare identifiers to avoid ambiguity.
+    // Tree-sitter will try this rule before falling back to identifier.
     function_call: ($) =>
       seq($.identifier, "(", optional(commaSep1($.expression)), ")"),
 

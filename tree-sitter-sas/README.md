@@ -77,6 +77,53 @@ This:
 - Reports library location
 - Guides next steps
 
+## CI/Automated Builds
+
+### GitHub Actions
+
+The Tree-sitter SAS grammar is automatically built on all platforms via GitHub Actions:
+
+- **Build Workflow**: `.github/workflows/build-grammar.yml`
+  - Runs on: Ubuntu, macOS, and Windows
+  - Compiles grammar for each platform
+  - Uploads compiled binaries as workflow artifacts
+  - Runs Python grammar tests
+
+- **Test Workflow**: `.github/workflows/test.yml`
+  - Runs full test suite on all platforms
+  - Generates coverage reports
+  - Uploads results to Codecov
+
+### Getting Pre-built Binaries
+
+Instead of building locally, you can download pre-compiled grammar libraries:
+
+1. **From GitHub Releases**: [Download pre-built binaries](https://github.com/username/sas2pyspark/releases)
+   - `libtree_sitter_sas.so` - Linux
+   - `libtree_sitter_sas.dylib` - macOS
+   - `tree_sitter_sas.dll` - Windows
+
+2. **From Workflow Artifacts**: Download from successful CI runs
+   - Visit the [GitHub Actions page](https://github.com/username/sas2pyspark/actions)
+   - Select the latest "Build Tree-sitter SAS Grammar" run
+   - Download the artifact for your platform
+   - Extract to `tree-sitter-sas/target/release/`
+
+3. **Manual Placement**:
+   ```bash
+   # Place the appropriate binary in:
+   tree-sitter-sas/target/release/
+   
+   # For Linux:
+   cp libtree_sitter_sas.so tree-sitter-sas/target/release/
+   
+   # For macOS:
+   cp libtree_sitter_sas.dylib tree-sitter-sas/target/release/
+   
+   # For Windows:
+   cp tree_sitter_sas.dll tree-sitter-sas/target/release/
+   ```
+
 ## Running Tests
 
 ### Rust tests
@@ -91,6 +138,9 @@ cd ..
 ```bash
 # Test expression parsing (requires compiled grammar)
 uv run pytest tree-sitter-sas/test/test_expressions.py -v
+
+# Run integration tests (works with compiled grammar or fallback stub)
+uv run pytest tests/test_grammar_integration.py -v
 ```
 
 ## Implementation Phases

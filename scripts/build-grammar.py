@@ -8,19 +8,41 @@ that can be used by the Python translator via ctypes.
 Requirements:
     - Rust 1.70+ (https://rustup.rs/)
     - tree-sitter-cli (cargo install tree-sitter-cli)
+    - Node.js 18+ (required by tree-sitter-cli to parse grammar.js)
+      Install from: https://nodejs.org/ or via package manager
 
 Usage:
     python scripts/build-grammar.py
+
+Troubleshooting:
+    If tree-sitter-cli generate fails with "program not found" (Node.js):
+    1. Install Node.js from https://nodejs.org/ (18+ LTS recommended)
+    2. Verify: node --version && npm --version
+    3. Re-run this script
+
+    Alternatively, on Windows:
+    - Use Chocolatey: choco install nodejs
+    - Use Windows Package Manager: winget install OpenJS.NodeJS
+    - Use WSL with your Linux package manager
 """
 
-import os
 import platform
 import subprocess
 import sys
 from pathlib import Path
 
 
-def check_rust_installed():
+def _print_safe(msg: str) -> None:
+    """Print with UTF-8 encoding to handle special characters on Windows."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        # Fall back to ASCII-safe version on encoding errors
+        msg_safe = msg.encode("utf-8", errors="replace").decode("ascii", errors="replace")
+        print(msg_safe)
+
+
+def check_rust_installed() -> bool:
     """Check if Rust/Cargo is installed."""
     try:
         result = subprocess.run(["rustc", "--version"], capture_output=True, text=True, timeout=5)
@@ -29,7 +51,7 @@ def check_rust_installed():
         return False
 
 
-def check_tree_sitter_cli():
+def check_tree_sitter_cli() -> bool:
     """Check if tree-sitter CLI is installed."""
     try:
         result = subprocess.run(
@@ -40,30 +62,59 @@ def check_tree_sitter_cli():
         return False
 
 
-def install_dependencies():
+def check_node_installed() -> bool:
+    """Check if Node.js is installed (required for tree-sitter generate)."""
+    try:
+        result = subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+def install_dependencies() -> bool:
     """Install Rust dependencies."""
-    print("Installing Rust dependencies...")
+    _print_safe("Installing Rust dependencies...")
     result = subprocess.run(["cargo", "fetch"], capture_output=True, text=True, timeout=120)
     return result.returncode == 0
 
 
-def generate_grammar(grammar_dir):
+def generate_grammar(grammar_dir: Path) -> bool:
     """Generate parser.c from grammar.js using tree-sitter CLI."""
-    print("Generating parser from grammar.js...")
+    _print_safe("Generating parser from grammar.js...")
 
     try:
+        # tree-sitter CLI requires the path to the grammar.js file
+        grammar_file = grammar_dir / "grammar.js"
         result = subprocess.run(
-            ["tree-sitter", "generate", str(grammar_dir)],
+            ["tree-sitter", "generate", str(grammar_file)],
+            cwd=str(grammar_dir),
             capture_output=True,
             text=True,
             timeout=60,
         )
 
         if result.returncode != 0:
-            print(f"Error: tree-sitter generate failed:\n{result.stderr}", file=sys.stderr)
+            # Check if the error is due to missing Node.js
+            if "program not found" in result.stderr and "node" in result.stderr:
+                print(
+                    "Error: Node.js is required but not found.",
+                    "tree-sitter-cli uses Node.js to parse grammar.js",
+                    "",
+                    "Install Node.js from: https://nodejs.org/ (18+ LTS recommended)",
+                    "",
+                    "Or use a package manager:",
+                    "  - macOS: brew install node",
+                    "  - Windows (Chocolatey): choco install nodejs",
+                    "  - Windows (winget): winget install OpenJS.NodeJS",
+                    "  - Linux (apt): sudo apt install nodejs npm",
+                    "",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"Error: tree-sitter generate failed:\n{result.stderr}", file=sys.stderr)
             return False
 
-        print("✓ Grammar generated successfully (parser.c created)")
+        _print_safe("[OK] Grammar generated successfully (parser.c created)")
         return True
 
     except subprocess.TimeoutExpired:
@@ -78,9 +129,9 @@ def generate_grammar(grammar_dir):
         return False
 
 
-def build_rust_library(grammar_dir):
+def build_rust_library(grammar_dir: Path) -> bool:
     """Build the Rust library using Cargo."""
-    print("Building Rust library with Cargo (release mode)...")
+    _print_safe("Building Rust library with Cargo (release mode)...")
 
     try:
         # Build in release mode for performance
@@ -96,7 +147,7 @@ def build_rust_library(grammar_dir):
             print(f"Error: cargo build failed:\n{result.stderr}", file=sys.stderr)
             return False
 
-        print("✓ Rust library built successfully")
+        _print_safe("[OK] Rust library built successfully")
         return True
 
     except subprocess.TimeoutExpired:
@@ -107,7 +158,7 @@ def build_rust_library(grammar_dir):
         return False
 
 
-def find_compiled_library(grammar_dir):
+def find_compiled_library(grammar_dir: Path):
     """Find the compiled library path."""
     # Determine platform-specific library name
     system = platform.system()
@@ -129,7 +180,8 @@ def find_compiled_library(grammar_dir):
     return None
 
 
-def main():
+def main() -> bool:
+    """Main build function."""
     # Get the project root
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
@@ -143,12 +195,12 @@ def main():
         print(f"Error: grammar.js not found at {grammar_dir}", file=sys.stderr)
         return False
 
-    print("=" * 70)
-    print("Building Tree-sitter SAS Grammar")
-    print("=" * 70)
+    _print_safe("=" * 70)
+    _print_safe("Building Tree-sitter SAS Grammar")
+    _print_safe("=" * 70)
 
     # Check prerequisites
-    print("\nChecking prerequisites...")
+    _print_safe("\nChecking prerequisites...")
 
     if not check_rust_installed():
         print(
@@ -157,7 +209,7 @@ def main():
             file=sys.stderr,
         )
         return False
-    print("✓ Rust installed")
+    _print_safe("[OK] Rust installed")
 
     if not check_tree_sitter_cli():
         print(
@@ -166,57 +218,68 @@ def main():
             file=sys.stderr,
         )
         return False
-    print("✓ tree-sitter CLI installed")
+    _print_safe("[OK] tree-sitter CLI installed")
+
+    if not check_node_installed():
+        print(
+            "Error: Node.js is required but not installed.",
+            "tree-sitter-cli uses Node.js to parse grammar.js",
+            "",
+            "Install Node.js from: https://nodejs.org/ (18+ LTS recommended)",
+            file=sys.stderr,
+        )
+        return False
+    _print_safe("[OK] Node.js installed")
 
     # Build steps
-    print(f"\nGrammar directory: {grammar_dir}")
+    _print_safe(f"\nGrammar directory: {grammar_dir}")
 
     # Generate parser from grammar.js
     if not generate_grammar(grammar_dir):
         return False
 
     # Install Rust dependencies
-    print("\nInstalling Rust dependencies...")
+    _print_safe("\nInstalling Rust dependencies...")
     if not install_dependencies():
         print("Warning: cargo fetch failed (may continue anyway)", file=sys.stderr)
 
     # Build Rust library
-    print()
+    _print_safe("")
     if not build_rust_library(grammar_dir):
         return False
 
     # Verify compiled library
-    print("\nVerifying compiled library...")
+    _print_safe("\nVerifying compiled library...")
     lib_path = find_compiled_library(grammar_dir)
 
     if not lib_path or not lib_path.exists():
-        print(f"Error: Compiled library not found", file=sys.stderr)
+        print("Error: Compiled library not found", file=sys.stderr)
         return False
 
-    print(f"✓ Compiled library found: {lib_path}")
+    _print_safe(f"[OK] Compiled library found: {lib_path}")
 
     # Run Rust tests
-    print("\nRunning Rust tests...")
+    _print_safe("\nRunning Rust tests...")
     result = subprocess.run(
         ["cargo", "test", "--release"], cwd=grammar_dir, capture_output=True, text=True, timeout=120
     )
 
     if result.returncode == 0:
-        print("✓ All Rust tests passed")
+        _print_safe("[OK] All Rust tests passed")
     else:
         print("Warning: Some Rust tests failed", file=sys.stderr)
         print(result.stderr, file=sys.stderr)
 
-    print()
-    print("=" * 70)
-    print("Build Complete!")
-    print("=" * 70)
-    print(f"\nCompiled library: {lib_path}")
-    print(f"\nThe Python parser will automatically find and use this library.")
-    print(f"\nNext steps:")
-    print(f"  1. Run Python tests: uv run pytest tree-sitter-sas/test/ -v")
-    print(f"  2. Or use the parser: from translator.parser import SASParser")
-    print()
+    _print_safe("")
+    _print_safe("=" * 70)
+    _print_safe("Build Complete!")
+    _print_safe("=" * 70)
+    _print_safe(f"\nCompiled library: {lib_path}")
+    _print_safe(f"\nThe Python parser will automatically find and use this library.")
+    _print_safe(f"\nNext steps:")
+    _print_safe(f"  1. Run Python tests: uv run pytest tree-sitter-sas/test/ -v")
+    _print_safe(f"  2. Or use the parser: from translator.parser import SASParser")
+    _print_safe("")
 
     return True
 

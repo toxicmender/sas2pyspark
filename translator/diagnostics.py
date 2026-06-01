@@ -5,6 +5,7 @@ Provides a centralized way to track and report various categories of diagnostics
 - Orphan ELSE statements (semantic errors)
 - Unsupported IF consequence types
 - IF statements with mixed-column assignments
+- Unsupported top-level statements (PROC, OPTIONS, LIBNAME, etc.)
 - Other translation warnings
 """
 
@@ -186,6 +187,43 @@ class DiagnosticReport:
             location=location,
             source_text=source_text,
             suggestion="This is not yet fully supported; consider simplifying the logic",
+        )
+
+    def add_unsupported_top_level_statement(
+        self, statement_type: str, source_text: Optional[str] = None, location: Optional[str] = None
+    ) -> None:
+        """Add diagnostic for unsupported top-level statement.
+
+        Args:
+            statement_type: The type of statement (e.g., 'PROC', 'OPTIONS', 'LIBNAME')
+            source_text: The statement (optional)
+            location: Location in source (optional)
+        """
+        self.add(
+            severity=DiagnosticSeverity.WARNING,
+            category=DiagnosticCategory.UNSUPPORTED_TOP_LEVEL,
+            message=f"{statement_type.upper()} statement is not yet supported in translation",
+            location=location,
+            source_text=source_text,
+            suggestion=f"This {statement_type.upper()} statement will be skipped during code generation",
+        )
+
+    def add_unparsed_top_level_statement(
+        self, source_text: Optional[str] = None, location: Optional[str] = None
+    ) -> None:
+        """Add diagnostic for unparsed top-level statement.
+
+        Args:
+            source_text: The statement (optional)
+            location: Location in source (optional)
+        """
+        self.add(
+            severity=DiagnosticSeverity.WARNING,
+            category=DiagnosticCategory.UNSUPPORTED_TOP_LEVEL,
+            message="Top-level statement could not be parsed or is not recognized",
+            location=location,
+            source_text=source_text,
+            suggestion="Check the syntax of this statement; it will be skipped",
         )
 
     def get_errors(self) -> List[Diagnostic]:

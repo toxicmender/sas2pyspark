@@ -170,6 +170,21 @@ class SASParser:
         }
 
     @staticmethod
+    def _classify_statement(text: str) -> str:
+        """Classify a semicolon-terminated statement by its keyword.
+
+        Args:
+            text: The statement text (should include trailing semicolon)
+
+        Returns:
+            Statement type keyword (e.g., 'proc', 'options', 'libname', etc.)
+        """
+        text_lower = text.strip().lower()
+        # Remove leading whitespace and get first word
+        first_word = text_lower.split()[0] if text_lower.split() else ""
+        return first_word
+
+    @staticmethod
     def _parse_data_step_statements(data_step_text: str) -> List[Dict[str, Any]]:
         """Parse DATA step internal statements.
 
@@ -345,7 +360,9 @@ class SASParser:
                 # Any intermediate simple statements before the special block?
                 if start > pos:
                     for sm in stmt_pat.finditer(s, pos, start):
-                        append_node("other_statement", sm.start(), sm.end())
+                        stmt_text = s[sm.start() : sm.end()].strip()
+                        stmt_type = self._classify_statement(stmt_text)
+                        append_node(stmt_type, sm.start(), sm.end())
 
                 # For DATA steps, parse internal statements
                 if ntype == "data_step":
@@ -360,7 +377,9 @@ class SASParser:
             # No special block ahead — append remaining semicolon-terminated statements
             appended = False
             for sm in stmt_pat.finditer(s, pos):
-                append_node("other_statement", sm.start(), sm.end())
+                stmt_text = s[sm.start() : sm.end()].strip()
+                stmt_type = self._classify_statement(stmt_text)
+                append_node(stmt_type, sm.start(), sm.end())
                 pos = sm.end()
                 appended = True
 

@@ -1,0 +1,79 @@
+name: Build Tree-sitter SAS Grammar
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'tree-sitter-sas/**'
+      - 'scripts/build-grammar.py'
+      - '.github/workflows/build-grammar.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'tree-sitter-sas/**'
+      - 'scripts/build-grammar.py'
+      - '.github/workflows/build-grammar.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Grammar on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install tree-sitter CLI
+        run: cargo install tree-sitter-cli
+
+      - name: Build Tree-sitter SAS grammar
+        run: python scripts/build-grammar.py
+
+      - name: Verify compiled library
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ls tree-sitter-sas/target/release/tree_sitter_sas.dll
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            ls tree-sitter-sas/target/release/libtree_sitter_sas.dylib
+          else
+            ls tree-sitter-sas/target/release/libtree_sitter_sas.so
+          fi
+
+      - name: Upload compiled grammar artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: grammar-${{ matrix.os }}
+          path: |
+            tree-sitter-sas/target/release/tree_sitter_sas.dll
+            tree-sitter-sas/target/release/libtree_sitter_sas.so
+            tree-sitter-sas/target/release/libtree_sitter_sas.dylib
+          retention-days: 30
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Run Python grammar tests
+        run: uv run pytest tree-sitter-sas/test/ -v --tb=short
+        if: success()
