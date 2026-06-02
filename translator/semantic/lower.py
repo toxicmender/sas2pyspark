@@ -19,7 +19,6 @@ from translator.diagnostics import get_global_diagnostics
 from translator.ir import (
     AssignmentNode,
     DatasetNode,
-    FilterNode,
     IRNode,
     IRProgram,
     JoinNode,
@@ -30,12 +29,10 @@ from translator.ir import (
     SortNode,
     UnionNode,
 )
-from translator.parser import ASTBuilder, ASTNode
-from translator.semantic import SemanticAnalyzer, SemanticContext, VariableScope, VariableType
+from translator.parser import ASTNode
+from translator.semantic import SemanticAnalyzer, SemanticContext
 from translator.semantic.conditionals import (
     ConditionalClause,
-    ConditionalExpressionBuilder,
-    ConditionalIRBuilder,
     ConditionalParser,
     ConditionalValidator,
     ConsequenceType,
@@ -403,7 +400,13 @@ class DataStepLowerer:
         """
         warnings.warn(
             f"IF statement assigns to multiple different columns: "
-            f"{[self._extract_assignment_column(c) for c in clauses if c.consequence_type == ConsequenceType.ASSIGNMENT]}. "
+            f"{
+                [
+                    self._extract_assignment_column(c)
+                    for c in clauses
+                    if c.consequence_type == ConsequenceType.ASSIGNMENT
+                ]
+            }. "
             "These will be translated as separate conditional assignments. "
             "For optimal Spark code, consider assigning to a single computed column."
         )
@@ -450,7 +453,7 @@ class DataStepLowerer:
             elif clause.consequence_type == ConsequenceType.DO_BLOCK:
                 # DO...END block
                 warnings.warn(
-                    f"IF statement with DO...END consequence detected. "
+                    "IF statement with DO...END consequence detected. "
                     "Complex DO/END blocks in conditionals require nested statement parsing. "
                     "This is not yet fully supported."
                 )

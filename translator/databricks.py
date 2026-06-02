@@ -4,8 +4,6 @@ Databricks integration module for SAS to PySpark translator.
 Provides utilities for connecting to Databricks and executing translated code.
 """
 
-from typing import Optional
-
 
 class DatabricksConnector:
     """Manages connections to Databricks workspace."""

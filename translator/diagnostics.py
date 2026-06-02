@@ -11,7 +11,7 @@ Provides a centralized way to track and report various categories of diagnostics
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 
 class DiagnosticSeverity(Enum):

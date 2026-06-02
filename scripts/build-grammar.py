@@ -275,10 +275,10 @@ def main() -> bool:
     _print_safe("Build Complete!")
     _print_safe("=" * 70)
     _print_safe(f"\nCompiled library: {lib_path}")
-    _print_safe(f"\nThe Python parser will automatically find and use this library.")
-    _print_safe(f"\nNext steps:")
-    _print_safe(f"  1. Run Python tests: uv run pytest tree-sitter-sas/test/ -v")
-    _print_safe(f"  2. Or use the parser: from translator.parser import SASParser")
+    _print_safe("\nThe Python parser will automatically find and use this library.")
+    _print_safe("\nNext steps:")
+    _print_safe("  1. Run Python tests: uv run pytest tree-sitter-sas/test/ -v")
+    _print_safe("  2. Or use the parser: from translator.parser import SASParser")
     _print_safe("")
 
     return True
