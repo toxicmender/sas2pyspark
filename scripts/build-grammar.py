@@ -2,13 +2,13 @@
 """
 Build script for Tree-sitter SAS grammar using Rust and Cargo.
 
-This script compiles the grammar.cjs into a binary parser library
+This script compiles the grammar.js into a binary parser library
 that can be used by the Python translator via ctypes.
 
 Requirements:
     - Rust 1.70+ (https://rustup.rs/)
     - tree-sitter-cli (cargo install tree-sitter-cli)
-    - Node.js 18+ (required by tree-sitter-cli to parse grammar.cjs)
+    - Node.js 18+ (required by tree-sitter-cli to parse grammar.js)
       Install from: https://nodejs.org/ or via package manager
 
 Usage:
@@ -79,12 +79,12 @@ def install_dependencies() -> bool:
 
 
 def generate_grammar(grammar_dir: Path) -> bool:
-    """Generate parser.c from grammar.cjs using tree-sitter CLI."""
-    _print_safe("Generating parser from grammar.cjs...")
+    """Generate parser.c from grammar.js using tree-sitter CLI."""
+    _print_safe("Generating parser from grammar.js...")
 
     try:
-        # tree-sitter CLI requires the path to the grammar.cjs file
-        grammar_file = grammar_dir / "grammar.cjs"
+        # tree-sitter CLI requires the path to the grammar.js file
+        grammar_file = grammar_dir / "grammar.js"
         result = subprocess.run(
             ["tree-sitter", "generate", str(grammar_file)],
             cwd=str(grammar_dir),
@@ -98,7 +98,7 @@ def generate_grammar(grammar_dir: Path) -> bool:
             if "program not found" in result.stderr and "node" in result.stderr:
                 print(
                     "Error: Node.js is required but not found.",
-                    "tree-sitter-cli uses Node.js to parse grammar.cjs",
+                    "tree-sitter-cli uses Node.js to parse grammar.js",
                     "",
                     "Install Node.js from: https://nodejs.org/ (18+ LTS recommended)",
                     "",
@@ -191,8 +191,8 @@ def main() -> bool:
         print(f"Error: Grammar directory not found at {grammar_dir}", file=sys.stderr)
         return False
 
-    if not (grammar_dir / "grammar.cjs").exists():
-        print(f"Error: grammar.cjs not found at {grammar_dir}", file=sys.stderr)
+    if not (grammar_dir / "grammar.js").exists():
+        print(f"Error: grammar.js not found at {grammar_dir}", file=sys.stderr)
         return False
 
     _print_safe("=" * 70)
@@ -223,7 +223,7 @@ def main() -> bool:
     if not check_node_installed():
         print(
             "Error: Node.js is required but not installed.",
-            "tree-sitter-cli uses Node.js to parse grammar.cjs",
+            "tree-sitter-cli uses Node.js to parse grammar.js",
             "",
             "Install Node.js from: https://nodejs.org/ (18+ LTS recommended)",
             file=sys.stderr,
@@ -234,7 +234,7 @@ def main() -> bool:
     # Build steps
     _print_safe(f"\nGrammar directory: {grammar_dir}")
 
-    # Generate parser from grammar.cjs
+    # Generate parser from grammar.js
     if not generate_grammar(grammar_dir):
         return False
 
