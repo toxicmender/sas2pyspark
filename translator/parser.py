@@ -10,7 +10,9 @@ semantic passes have visibility into top-level statements instead of
 silently seeing an empty source file.
 """
 
+import platform
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,12 +41,11 @@ class SASParser:
         self.grammar_loaded = False
 
         # Helpful build instructions used in warnings
-        self._build_instructions = """
-            To build the Tree-sitter SAS grammar, run: python scripts/build-grammar.py\n
-            This project uses a Rust/Cargo-based build. Ensure you have Rust + Cargo installed,\n
-            and the tree-sitter CLI available (`cargo install tree-sitter-cli`).\n
-            See: tree-sitter-sas/README.md
-            """
+        self._build_instructions = (
+            "To build the Tree-sitter SAS grammar, run: python scripts/build-grammar.py\n"
+            "This project uses a Rust/Cargo-based build. Ensure you have Rust + Cargo installed,\n"
+            "and the tree-sitter CLI available (`cargo install tree-sitter-cli`). See: tree-sitter-sas/README.md"
+        )
 
         try:
             # Import here so the package is optional at runtime
